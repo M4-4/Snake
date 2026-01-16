@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Neon Snake</title>
+
+<style>
+body {
+    margin: 0;
+    background: radial-gradient(circle at top, #0f2027, #000);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: Arial, sans-serif;
+    color: white;
+}
+
+.game {
+    background: #050505;
+    padding: 20px;
+    border-radius: 18px;
+    box-shadow: 0 0 40px #00ffe5;
+    text-align: center;
+}
+
+canvas {
+    background: #000;
+    border-radius: 12px;
+    box-shadow: inset 0 0 20px #00ffe5;
+}
+
+.info {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+.highscores {
+    margin-top: 10px;
+    font-size: 14px;
+    text-align: left;
+}
+</style>
+</head>
+
+<body>
+<div class="game">
+    <h2>🐍 Neon Snake</h2>
+    <canvas id="canvas" width="420" height="420"></canvas>
+
+    <div class="info">
+        <div>Score: <span id="score">0</span></div>
+        <div id="pauseText"></div>
+    </div>
+
+    <div class="highscores">
+        <b>🏆 Highscores</b>
+        <ol id="highscoreList"></ol>
+    </div>
+</div>
+
+<script>
+/* =========================
+   GRUNDKONFIGURATION
+========================= */
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const speed = 2.4;
+let paused = false;
+let score = 0;
+
+let direction = { x: 1, y: 0 };
+let nextDirection = { x: 1, y: 0 };
+
+let snake = [{ x: canvas.width / 2, y: canvas.height / 2 }];
+let snakeLength = 10;
+
+let food = randomFood();
+let highscores = JSON.parse(localStorage.getItem("neonSnakeHS")) || [];
+
+/* Reset-Animation */
+let resetting = false;
+
+/* =========================
+   HILFSFUNKTIONEN
+========================= */
+function randomFood() {
+    return {
+        x: Math.random() * (canvas.width - 20) + 10,
+        y: Math.random() * (canvas.height - 20) + 10
+    };
+}
+
+/* =========================
+   GAME LOOP
+========================= */
+function gameLoop() {
+    if (!paused) update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+/* =========================
+   UPDATE
+========================= */
+function update() {
+    /* Reset-Animation */
+    if (resetting) {
+        snakeLength -= 1;
+        if (snakeLength <= 0) {
+            resetting = false;
+            resetGame();
+        }
+        return;
+    }
+
+    direction = nextDirection;
+
+    const head = {
+        x: snake[0].x + direction.x * speed,
+        y: snake[0].y + direction.y * speed
+    };
+
+    /* Wand-Kollision */
+    if (
+        head.x < 5 || head.y < 5 ||
+        head.x > canvas.width - 5 ||
+        head.y > canvas.height - 5
+    ) {
+        return gameOver();
+    }
+
+    snake.unshift(head);
+    while (snake.length > snakeLength) snake.pop();
+
+    /* Food */
+    const dx = head.x - food.x;
+    const dy = head.y - food.y;
+    if (Math.hypot(dx, dy) < 10) {
+        score++;
+        snakeLength += 4;
+        food = randomFood();
+        document.getElementById("score").textContent = score;
+    }
+
+    /* Selbst-Kollision */
+    for (let i = 10; i < snake.length; i++) {
+        if (Math.hypot(head.x - snake[i].x, head.y - snake[i].y) < 6) {
+            return gameOver();
+        }
+    }
+}
+
+/* =========================
+   DRAW
+========================= */
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    /* Snake Glow */
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = "#00ffe5";
+    ctx.strokeStyle = "#00ffe5";
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+
+    ctx.beginPath();
+    ctx.moveTo(snake[0].x, snake[0].y);
+    for (let p of snake) ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+
+    /* Food */
+    ctx.beginPath();
+    ctx.fillStyle = "#ff2d55";
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "#ff2d55";
+    ctx.arc(food.x, food.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+}
+
+/* =========================
+   GAME OVER
+========================= */
+function gameOver() {
+    highscores.push(score);
+    highscores.sort((a,b) => b - a);
+    highscores = highscores.slice(0,5);
+    localStorage.setItem("neonSnakeHS", JSON.stringify(highscores));
+    renderHighscores();
+
+    alert("💀 Game Over! Score: " + score);
+    paused = true;
+    document.getElementById("pauseText").textContent = "⏸ PAUSE – R = RESET";
+}
+
+/* =========================
+   RESET
+========================= */
+function startResetAnimation() {
+    resetting = true;
+}
+
+function resetGame() {
+    score = 0;
+    snake = [{ x: canvas.width / 2, y: canvas.height / 2 }];
+    snakeLength = 10;
+    direction = { x: 1, y: 0 };
+    nextDirection = { x: 1, y: 0 };
+    food = randomFood();
+    document.getElementById("score").textContent = score;
+}
+
+/* =========================
+   HIGHSCORES
+========================= */
+function renderHighscores() {
+    const list = document.getElementById("highscoreList");
+    list.innerHTML = "";
+    highscores.forEach(score => {
+        const li = document.createElement("li");
+        li.textContent = score;
+        list.appendChild(li);
+    });
+}
+renderHighscores();
+
+/* =========================
+   INPUT
+========================= */
+document.addEventListener("keydown", e => {
+    const k = e.key.toLowerCase();
+
+    /* Pause */
+    if (k === "escape") {
+        paused = !paused;
+        document.getElementById("pauseText").textContent =
+            paused ? "⏸ PAUSE – R = RESET" : "";
+    }
+
+    /* Reset nur bei Pause */
+    if (k === "r" && paused) {
+        startResetAnimation();
+    }
+
+    /* WASD */
+    if (k === "w" && direction.y === 0) nextDirection = { x: 0, y: -1 };
+    if (k === "s" && direction.y === 0) nextDirection = { x: 0, y: 1 };
+    if (k === "a" && direction.x === 0) nextDirection = { x: -1, y: 0 };
+    if (k === "d" && direction.x === 0) nextDirection = { x: 1, y: 0 };
+});
+
+/* START */
+gameLoop();
+</script>
+</body>
+</html>
